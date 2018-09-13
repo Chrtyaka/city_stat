@@ -1,0 +1,1286 @@
+from datetime import datetime
+
+from flask import request, json, Response
+from sqlalchemy import and_
+
+from app import app, db
+#from flask.ext.sqlalchemy import get_debug_queries
+
+
+from models import Category, Feature, Country, FeatureCountry, Province, FeatureProvince, Group, GroupProvince, Area, FeatureArea, Locality, FeatureLocality, District, FeatureDistrict, Street, Address, FeatureAddress
+
+
+#@app.after_request
+#def after_request(response):
+   # for query in get_debug_queries():
+        #if query.duration >= Config.DATABASE_QUERY_TIMEOUT:
+    #    app.logger.warning("SLOW QUERY: %s\nParameters: %s\nDuration: %fs\nContext: %s\n" % (query.statement, query.parameters, query.duration, query.context))
+    #return response
+
+@app.route('/')
+@app.route('/index')
+def index():
+    return "Hello, World!"
+
+
+@app.route('/add_category',  methods=['POST'])
+def add_category():
+    json_string = request.get_json(force=True)
+    name = Category.query.filter_by(categoryname = json_string['categoryname']).first()
+    if name is None:
+       category = Category(categoryname = json_string['categoryname'])
+       db.session.add(category)
+       db.session.commit()
+       return "Category created!"
+    else:
+       return "Category already exists!"
+
+@app.route('/add_feature',  methods=['POST'])
+def add_feature():
+    json_string = request.get_json(force=True)
+    feature_name = json_string['featurename']
+    category = Category.query.filter_by(categoryname = json_string['category_id']).first()
+    if category is None:
+        category = Category(categoryname = json_string['category_id'])
+        db.session.add(category)
+        db.session.commit()
+
+    featureadd = Feature.query.filter(and_(Feature.featurename.like(feature_name), Feature.category_id.like(category.id))).first()
+    if featureadd is None:
+        feature = Feature(featurename=feature_name,category_id=category.id)
+        db.session.add(feature)
+        db.session.commit()
+        return "Feature created!"
+    else:
+       return "Feature already exists!"
+
+@app.route('/add_country',  methods=['POST'])
+def add_country():
+    json_string = request.get_json(force=True)
+    country = Country.query.filter_by(countryname = json_string['countryname']).first()
+    if country is None:
+       country_name = Country(countryname = json_string['countryname'], coordinates = json_string['coordinates'])
+       db.session.add(country_name)
+       db.session.commit()
+       return "Country created!"
+    else:
+       return "Country already exists!"
+ 
+@app.route('/add_feature_county',  methods=['POST'])
+def add_feature_country():
+    json_string = request.get_json(force=True)
+    date = json_string['date']
+    if date=="":
+        date = datetime.today()
+    else:
+        date = datetime.strptime(date, "%Y,%m,%d")
+
+    country_name = Country.query.filter_by(countryname = json_string['country_id']).first()
+    if country_name is None:
+        return "Country is not found!"
+
+    if 'features' in json_string:
+        for curve in json_string['features']:
+             feature_name = Feature.query.filter_by(featurename = curve['feature_id']).first()
+             if feature_name is None:
+                 return "Feature is not found!"
+             value = curve['value']
+             feature_country = FeatureCountry.query.filter(and_(FeatureCountry.country_id.like(country_name.id), FeatureCountry.feature_id.like(feature_name.id), FeatureCountry.value.like(value), FeatureCountry.date.like(date))).first()
+             if feature_country is None:
+                 feature = FeatureCountry(country_id = country_name.id, feature_id = feature_name.id, value = value, date = date)
+                 db.session.add(feature)
+        db.session.commit()
+    else:
+        value = json_string['value']
+        feature_name = Feature.query.filter_by(featurename = json_string['feature_id']).first()
+        if feature_name is None:
+                 return "Feature is not found!"
+        feature_country = FeatureCountry.query.filter(and_(FeatureCountry.country_id.like(country_name.id), FeatureCountry.feature_id.like(feature_name.id), FeatureCountry.value.like(value), FeatureCountry.date.like(date))).first()
+        if feature_country is None:
+            feature = FeatureCountry(country_id = country_name.id, feature_id = feature_name.id, value = value, date = date)
+            db.session.add(feature)
+            db.session.commit()
+            return "Feature country created!"
+        else:
+            return "Feature country already exists!"
+
+    
+@app.route('/add_province',  methods=['POST'])
+def add_province():
+    json_string = request.get_json(force=True)
+    country = Country.query.filter_by(countryname = json_string['country_id']).first()
+    if country is None:
+        return "Country is not found!"
+
+    province_name = Province.query.filter_by(provincename = json_string['provincename'], country_id = country.id).first()
+    if province_name is None:
+       province = Province(provincename = json_string['provincename'], country_id = country.id, coordinates = json_string['coordinates'])
+       db.session.add(province)
+       db.session.commit()
+       return "Province created!"
+    else:
+       return "Province already exists!"
+
+@app.route('/add_feature_province',  methods=['POST'])
+def add_feature_province():
+    json_string = request.get_json(force=True)
+
+    date = json_string['date']
+    if date=="":
+        date = datetime.today()
+    else:
+        date = datetime.strptime(date, "%Y,%m,%d")
+    country = Country.query.filter_by(countryname = json_string['country_id']).first()
+    if country is None:
+        return "Country is not found!"
+    province_name = Province.query.filter_by(provincename = json_string['province_id'], country_id = country.id).first()
+    if province_name is None:
+        return "Province is not found!"
+
+    if 'features' in json_string:
+        for curve in json_string['features']:
+             feature_name = Feature.query.filter_by(featurename = curve['feature_id']).first()
+             if feature_name is None:
+                 return "Feature is not found!"
+             value = curve['value']
+             feature_province = FeatureProvince.query.filter(and_(FeatureProvince.province_id.like(province_name.id), FeatureProvince.feature_id.like(feature_name.id), FeatureProvince.value.like(value), FeatureProvince.date.like(date))).first()
+             if feature_province is None:
+                 feature = FeatureProvince(province_id = province_name.id, feature_id = feature_name.id, value = value, date = date)
+                 db.session.add(feature)
+        db.session.commit()
+        return "Features province created!"
+    else:
+        value = json_string['value']
+        feature_name = Feature.query.filter_by(featurename = json_string['feature_id']).first()
+        if feature_name is None:
+                 return "Feature is not found!"
+        feature_province = FeatureProvince.query.filter(and_(FeatureProvince.province_id.like(province_name.id), FeatureProvince.feature_id.like(feature_name.id), FeatureProvince.value.like(value), FeatureProvince.date.like(date))).first()
+        if feature_province is None:
+            feature = FeatureProvince(province_id = province_name.id, feature_id = feature_name.id, value = value, date = date)
+            db.session.add(feature)
+            db.session.commit()
+            return "Feature province created!"
+        else:
+            return "Feature province already exists!"
+
+
+@app.route('/add_group',  methods=['POST'])
+def add_group():
+    json_string = request.get_json(force=True)
+    group = Group.query.filter_by(group = json_string['group'], groupname = json_string['groupname']).first()
+    if group is None:
+       group_name = Group(group = json_string['group'], groupname = json_string['groupname'], coordinates = json_string['coordinates'])
+       db.session.add(group_name)
+       db.session.commit()
+       return "Group created!"
+    else:
+       return "Group already exists!"
+
+@app.route('/addgrprov',  methods=['POST'])
+def addgrprov():
+    json_string = request.get_json(force=True)
+    group =  Group.query.filter_by(group = json_string['group_id']).first()
+    if group is None:
+       return "Group is not found!"
+    province = Province.query.filter_by(provincename = json_string['province_id']).first()
+    if province is None:
+       return "Province is not found!"
+    gr_prov = GroupProvince.query.filter_by(group_id = group.id, province_id = province.id).first()
+    if gr_prov is None:
+       group_province = GroupProvince(group_id = group.id, province_id = province.id)
+       db.session.add(group_province)
+       db.session.commit()
+       return "Group province created!"
+    else:
+       return "Group province already exists!"
+
+@app.route('/add_area',  methods=['POST'])
+def add_area():
+    json_string = request.get_json(force=True)
+    province = Province.query.filter_by(provincename = json_string['province_id']).first()
+    if province is None:
+        return "Province is not found!"
+
+    area_name=Area.query.filter_by(areaname = json_string['areaname'], province_id = province.id).first()
+
+    if area_name is None:
+       area = Area(areaname = json_string['areaname'], province_id = province.id, coordinates = json_string['coordinates'])
+       db.session.add(area)
+       db.session.commit()
+       return "Area created!"
+    else:
+       return "Area already exists!"
+
+@app.route('/add_featuare_area',  methods=['POST'])
+def add_featuare_area():
+    json_string = request.get_json(force=True)
+
+    date = json_string['date']
+    if date=="":
+        date = datetime.today()
+    else:
+        date = datetime.strptime(date, "%Y,%m,%d")
+
+    province = Province.query.filter_by(provincename = json_string['province_id']).first()
+    if province is None:
+        return "Province is not found!"
+    area_name=Area.query.filter_by(areaname = json_string['area_id'], province_id = province.id).first()
+    if area_name is None:
+        return "Area is not found!"
+
+    if 'features' in json_string:
+        for curve in json_string['features']:
+             feature_name = Feature.query.filter_by(featurename = curve['feature_id']).first()
+             if feature_name is None:
+                 return "Feature is not found!"
+             value = curve['value']
+             feature_area = FeatureArea.query.filter(and_(FeatureArea.province_id.like(area_name.id), FeatureArea.feature_id.like(feature_name.id), FeatureArea.value.like(value), FeatureArea.date.like(date))).first()
+             if feature_area is None:
+                 feature = FeatureArea(area_id = area_name.id, feature_id = feature_name.id, value = value, date = date)
+                 db.session.add(feature)
+        db.session.commit()
+        return "Features area created!"
+    else:
+        value = json_string['value']
+        feature_name = Feature.query.filter_by(featurename = json_string['feature_id']).first()
+        if feature_name is None:
+                 return "Feature is not found!"
+        feature_area = FeatureArea.query.filter(and_(FeatureArea.province_id.like(area_name.id), FeatureArea.feature_id.like(feature_name.id), FeatureArea.value.like(value), FeatureArea.date.like(date))).first()
+        if feature_area is None:
+            feature = FeatureArea(area_id = area_name.id, feature_id = feature_name.id, value = value, date = date)
+            db.session.add(feature)
+            db.session.commit()
+            return "Feature area created!"
+        else:
+            return "Feature area already exists!"
+
+
+
+@app.route('/add_locality',  methods=['POST'])
+def add_locality():
+    json_string = request.get_json(force=True)
+    province = Province.query.filter_by(provincename = json_string['province_id']).first()
+    if province is None:
+        return "Province is not found!"
+    if 'area' in json_string:
+        area = Area.query.filter_by(areaname = json_string['area_id']).first()
+        if area is None:
+            locality_name=Locality.query.filter_by(localityname = json_string['localityname'], province_id = province.id).first()
+            if locality_name is None:
+                locality = Area(areaname = json_string['areaname'], province_id = province.id, coordinates = json_string['coordinates'], area_id=None)
+                db.session.add(locality)
+                db.session.commit()
+                return "Locality created!"
+            else:
+                return "Locality already exists!"
+        else:
+            locality_name=Locality.query.filter_by(localityname = json_string['localityname'], province_id = province.id, area_id = area.id).first()
+            if locality_name is None:
+                locality = Area(areaname = json_string['areaname'], province_id = province.id, coordinates = json_string['coordinates'], area_id=area.id)
+                db.session.add(locality)
+                db.session.commit()
+                return "Locality created!"
+            else:
+                return "Locality already exists!"
+    else:
+        locality_name=Locality.query.filter_by(localityname = json_string['localityname'], province_id = province.id).first()
+        if locality_name is None:
+            locality = Area(areaname = json_string['areaname'], province_id = province.id, coordinates = json_string['coordinates'], area_id=None)
+            db.session.add(locality)
+            db.session.commit()
+            return "Locality created!"
+        else:
+            return "Locality already exists!"
+
+@app.route('/add_feature_loc',  methods=['POST'])
+def add_feature_loc():
+    json_string = request.get_json(force=True)
+
+    date = json_string['date']
+    if date=="":
+        date = datetime.today()
+    else:
+        date = datetime.strptime(date, "%Y,%m,%d")
+    province = Province.query.filter_by(provincename = json_string['province_id']).first()
+    if province is None:
+        return "Province is not found!"
+    if 'area' in json_string:
+        area = Area.query.filter_by(areaname = json_string['area_id']).first()
+        if area is None:
+            locality_name=Locality.query.filter_by(localityname = json_string['locality_id'], province_id = province.id, area_id = area.id).first()
+            if locality_name is None:
+                return "Locality is not found!"
+
+    else:
+        locality_name=Locality.query.filter_by(localityname = json_string['locality_id'], province_id = province.id).first()
+        if locality_name is None:
+            return "Locality is not found!"
+    if 'features' in json_string:
+        for curve in json_string['features']:
+             feature_name = Feature.query.filter_by(featurename = curve['feature_id']).first()
+             if feature_name is None:
+                 return "Feature is not found!"
+             value = curve['value']
+             feature_locality = FeatureLocality.query.filter(and_(FeatureLocality.locality_id.like(locality_name.id), FeatureLocality.feature_id.like(feature_name.id), FeatureLocality.value.like(value), FeatureLocality.date.like(date))).first()
+             if feature_locality is None:
+                 feature = FeatureLocality(locality_id = locality_name.id, feature_id = feature_name.id, value = value, date = date)
+                 db.session.add(feature)
+        db.session.commit()
+        return "Features locality created!"
+    else:
+        value = json_string['value']
+        feature_name = Feature.query.filter_by(featurename = json_string['feature_id']).first()
+        if feature_name is None:
+                 return "Feature is not found!"
+        feature_locality = FeatureLocality.query.filter(and_(FeatureLocality.locality_id.like(locality_name.id), FeatureLocality.feature_id.like(feature_name.id), FeatureLocality.value.like(value), FeatureLocality.date.like(date))).first()
+        if feature_locality is None:
+            feature = FeatureLocality(locality_id = locality_name.id, feature_id = feature_name.id, value = value, date = date)
+            db.session.add(feature)
+            db.session.commit()
+            return "Feature locality created!"
+        else:
+            return "Feature locality already exists!"
+
+
+@app.route('/add_district',  methods=['POST'])
+def add_district():
+    json_string = request.get_json(force=True)
+    province = Province.query.filter_by(provincename = json_string['province_id']).first()
+    if province is None:
+        return "Province is not found!"
+    if 'area' in json_string:
+        area = Area.query.filter_by(areaname = json_string['area_id']).first()
+        if area is None:
+            return "Area is not found!"
+        locality = Locality.query.filter_by(localityname = json_string['locality_id'], province_id = province.id, area_id = area.id ).first()
+        if locality is None:
+            return "Locality is not found!"
+    else:
+        locality = Locality.query.filter_by(localityname = json_string['locality_id'], province_id = province.id ).first()
+        if locality is None:
+            return "Locality is not found!"
+    district_name=District.query.filter_by(districtname = json_string['districtname'], locality_id = locality.id).first()
+    if district_name is None:
+       district = District(districtname = json_string['districtname'], locality_id = locality.id, coordinates = json_string['coordinates'])
+       db.session.add(district)
+       db.session.commit()
+       return "District created!"
+    else:
+       return "District already exists!"
+
+@app.route('/add_feature_district',  methods=['POST'])
+def add_feature_district():
+    json_string = request.get_json(force=True)
+    date = json_string['date']
+    if date=="":
+        date = datetime.today()
+    else:
+        date = datetime.strptime(date, "%Y,%m,%d")
+    province = Province.query.filter_by(provincename = json_string['province_id']).first()
+    if province is None:
+        return "Province is not found!"
+    if 'area' in json_string:
+        area = Area.query.filter_by(areaname = json_string['area_id']).first()
+        if area is None:
+            return "Area is not found!"
+        locality = Locality.query.filter_by(localityname = json_string['locality_id'], province_id = province.id, area_id = area.id ).first()
+        if locality is None:
+            return "Locality is not found!"
+    else:
+        locality = Locality.query.filter_by(localityname = json_string['locality_id'], province_id = province.id ).first()
+        if locality is None:
+            return "Locality is not found!"
+    district_name=District.query.filter_by(districtname = json_string['district_id'], locality_id = locality.id).first()
+    if district_name is None:
+        return "District is not found!"
+
+    if 'features' in json_string:
+        for curve in json_string['features']:
+             feature_name = Feature.query.filter_by(featurename = curve['feature_id']).first()
+             if feature_name is None:
+                 return "Feature is not found!"
+             value = curve['value']
+             feature_district = FeatureDistrict.query.filter(and_(FeatureDistrict.district_id.like(district_name.id), FeatureDistrict.feature_id.like(feature_name.id), FeatureDistrict.value.like(value), FeatureDistrict.date.like(date))).first()
+             if feature_district is None:
+                 feature = FeatureDistrict(district_id = district_name.id, feature_id = feature_name.id, value = value, date = date)
+                 db.session.add(feature)
+        db.session.commit()
+        return "Features district created!"
+    else:
+        value = json_string['value']
+        feature_name = Feature.query.filter_by(featurename = json_string['feature_id']).first()
+        if feature_name is None:
+                 return "Feature is not found!"
+        feature_district = FeatureDistrict.query.filter(and_(FeatureDistrict.district_id.like(district_name.id), FeatureDistrict.feature_id.like(feature_name.id), FeatureDistrict.value.like(value), FeatureDistrict.date.like(date))).first()
+        if feature_district is None:
+            feature = FeatureDistrict(district_id = district_name.id, feature_id = feature_name.id, value = value, date = date)
+            db.session.add(feature)
+            db.session.commit()
+            return "Feature district created!"
+        else:
+            return "Feature district already exists!"
+
+
+@app.route('/add_street',  methods=['POST'])
+def add_street():
+    json_string = request.get_json(force=True)
+    province = Province.query.filter_by(provincename = json_string['province_id']).first()
+    if province is None:
+        return "Province is not found!"
+    if 'area' in json_string:
+        area = Area.query.filter_by(areaname = json_string['area_id']).first()
+        if area is None:
+            return "Area is not found!"
+        locality = Locality.query.filter_by(localityname = json_string['locality_id'], province_id = province.id, area_id = area.id ).first()
+        if locality is None:
+            return "Locality is not found!"
+    else:
+        locality = Locality.query.filter_by(localityname = json_string['locality_id'], province_id = province.id ).first()
+        if locality is None:
+            return "Locality is not found!"
+    street_name=Street.query.filter_by(streetname = json_string['streetname'], locality_id = locality.id).first()
+    if street_name is None:
+       street = Street(streetname = json_string['streetname'], locality_id = locality.id, coordinates = json_string['coordinates'], fias_id = json_string['fias'])
+       db.session.add(street)
+       db.session.commit()
+       return "Street created!"
+    else:
+       return "Street already exists!"
+
+@app.route('/add_address',  methods=['POST'])
+def add_address():
+    json_string = request.get_json(force=True)
+    country = Country.query.filter_by(countryname = json_string['country_id']).first()
+    if country is None:
+        return "Country is not found!"
+    province = Province.query.filter_by(provincename = json_string['province_id']).first()
+    if province is None:
+        return "Province is not found!"
+
+    street = Street.query.filter_by(streetname = json_string['street_id']).first()
+    if street is None:
+        return "Street is not found!"
+    if 'house' in json_string:
+        house = json_string['house']
+    else:
+        house = ""
+    if 'block' in json_string:
+        block = json_string['block']
+    else:
+        block = ""
+    if 'building' in json_string:
+        building = json_string['building']
+    else:
+        building = ""
+    locality = Locality.query.filter_by(localityname = json_string['locality_id']).first()
+    if locality is None:
+        return "Locality is not found!"
+    if 'area' in json_string:
+        area = Area.query.filter_by(areaname = json_string['area_id']).first()
+        if area is None:
+            return "Area is not found!"
+        if 'district' in json_string:
+            district = District.query.filter_by(districtname = json_string['district_id']).first()
+            if district is None:
+                return "District is not found!"
+            address = Address.query.filter_by(country_id = country.id, province_id = province.id, area_id = area.id, locality_id = locality.id, district_id = district.id, street_id = street.id, house = house, block = block, building = building)
+            if address is None:
+                ad = Address(country_id = country.id, province_id = province.id, area_id = area.id, locality_id = locality.id, district_id = district.id, street_id = street.id, house = house, block = block, building = building, postcode = json_string['postcode'], addressline = json_string['addressline'])
+                db.session.add(ad)
+                db.session.commit()
+                return "Address created!"
+            else:
+                return "Address already exists!"
+        else:
+            address = Address.query.filter_by(country_id = country.id, province_id = province.id, area_id = area.id, locality_id = locality.id, street_id = street.id, house = house, block = block, building = building)
+            if address is None:
+                ad = Address(country_id = country.id, province_id = province.id, area_id = area.id, locality_id = locality.id, street_id = street.id, house = house, block = block, building = building, postcode = json_string['postcode'], addressline = json_string['addressline'])
+                db.session.add(ad)
+                db.session.commit()
+                return "Address created!"
+            else:
+                return "Address already exists!"
+    else:
+        if 'district' in json_string:
+            district = District.query.filter_by(districtname = json_string['district_id']).first()
+            if district is None:
+                return "District is not found!"
+            address = Address.query.filter_by(country_id = country.id, province_id = province.id, locality_id = locality.id, district_id = district.id, street_id = street.id, house = house, block = block, building = building)
+            if address is None:
+                ad = Address(country_id = country.id, province_id = province.id, locality_id = locality.id, district_id = district.id, street_id = street.id, house = house, block = block, building = building, postcode = json_string['postcode'], addressline = json_string['addressline'])
+                db.session.add(ad)
+                db.session.commit()
+                return "Address created!"
+            else:
+                return "Address already exists!"
+        else:
+            address = Address.query.filter_by(country_id = country.id, province_id = province.id, locality_id = locality.id, street_id = street.id, house = house, block = block, building = building)
+            if address is None:
+                ad = Address(country_id = country.id, province_id = province.id, locality_id = locality.id, street_id = street.id, house = house, block = block, building = building, postcode = json_string['postcode'], addressline = json_string['addressline'])
+                db.session.add(ad)
+                db.session.commit()
+                return "Address created!"
+            else:
+                return "Address already exists!"
+
+
+
+@app.route('/add_feature_address',  methods=['POST'])
+def add_feature_address():
+    json_string = request.get_json(force=True)
+
+    date = json_string['date']
+    if date=="":
+        date = datetime.today()
+    else:
+        date = datetime.strptime(date, "%Y,%m,%d")
+    address_name = Address.query.filter_by(addressline = json_string['addressline']).first()
+    if address_name is None:
+        return "Address is not found!"
+    if 'features' in json_string:
+        for curve in json_string['features']:
+             feature_name = Feature.query.filter_by(featurename = curve['feature_id']).first()
+             if feature_name is None:
+                 return "Feature is not found!"
+             value = curve['value']
+             feature_address = FeatureAddress.query.filter(and_(FeatureAddress.district_id.like(address_name.id), FeatureAddress.feature_id.like(feature_name.id), FeatureAddress.value.like(value), FeatureAddress.date.like(date))).first()
+             if feature_address is None:
+                 feature = FeatureAddress(address_id = address_name.id, feature_id = feature_name.id, value = value, date = date)
+                 db.session.add(feature)
+        db.session.commit()
+        return "Features address created!"
+    else:
+        value = json_string['value']
+        feature_name = Feature.query.filter_by(featurename = json_string['feature_id']).first()
+        if feature_name is None:
+                 return "Feature is not found!"
+        feature_address = FeatureAddress.query.filter(and_(FeatureAddress.district_id.like(address_name.id), FeatureAddress.feature_id.like(feature_name.id), FeatureAddress.value.like(value), FeatureAddress.date.like(date))).first()
+        if feature_address is None:
+            feature = FeatureAddress(address_id = address_name.id, feature_id = feature_name.id, value = value, date = date)
+            db.session.add(feature)
+            db.session.commit()
+            return "Feature address created!"
+        else:
+            return "Feature address already exists!"
+
+
+@app.route('/get_category',  methods=['GET'])
+def get_category():
+    categorys = Category.query.all()
+    
+    res = [{
+        'category_id': category.id,
+        'namecategory': category.categoryname,
+        }for category in categorys]
+    return Response( json.dumps({"amount categorys": len(res), "categorys": res}),content_type="application/json")
+
+@app.route('/get_feature',  methods=['GET'])
+def get_feature():
+    features = Feature.query.all()
+    res = []
+    for feature in features:
+        category = Category.query.filter_by(id=feature.category_id).first()
+        res.append({
+        'feature_id': feature.id,
+        'feature_name': feature.featurename,
+        'category_name': category.categoryname
+        })
+    return Response( json.dumps({"amount features": len(res), "features": res}),content_type="application/json")
+
+@app.route('/get_country',  methods=['GET'])
+def get_country():
+    countrys = Country.query.all()
+    res = [{  
+         
+        'country_id': country.id,
+        'countryname': country.countryname,
+        'coordinates': country.coordinates
+        }for country in countrys]
+    return Response( json.dumps({"amount countrys": len(res), "country": res}),content_type="application/json")
+
+
+        
+@app.route('/get_feature_country',  methods=['POST'])
+def get_feature_country():
+    json_string = request.get_json(force=True)
+    if 'country_id' in json_string:
+        country_id = int(json_string['country_id'])
+        country = Country.query.filter_by(id = country_id).first()
+        if country is None:
+            return "Country is not found"
+        else:
+            feature_country = FeatureCountry.query.filter_by(country_id=country.id).all()
+            res = []
+            for feature in feature_country:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                res.append({
+                'features_country_id': feature.id,
+                'feature_name': feat.featurename,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            print(res)
+            return Response(json.dumps({"name country":country.countryname, "amount features country": len(res), "features country": res}),content_type="application/json")
+    else:
+        feature_country = FeatureCountry.query.all()
+        if 'characteristics' in json_string:
+            for curve in json_string['characteristics']:
+                feature_name = Feature.query.filter_by(featurename=curve['feature_name']).first()
+                if feature_name is None:
+                    return "Feature is not found"
+                value = curve['feature_name']
+                flag = curve['feature_name']
+                feature_country = feature_country.query.filter_by(feature_id = feature_name.id).all()
+                if feature_country is None:
+                    return "Features county is not found "
+                if flag == "=":
+                    feature_country = feature_country.query.filter_by( value = value).all()
+                    if feature_country is None:
+                        return "Features county is not found "
+                if flag == ">":
+                    feature_country = feature_country.query.filter(FeatureCountry.value > value).all()
+                    if feature_country is None:
+                        return "Features county is not found "
+                if flag == "<":
+                    feature_country = feature_country.query.filter(FeatureCountry.value < value).all()
+                    if feature_country is None:
+                        return "Features county is not found "
+
+            res = []
+            for feature in feature_country:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                country = Country.query.filter_by(id= feature.country_id).first()
+                res.append({
+                    'features_country_id': feature.id,
+                    'feature_name': feat.featurename,
+                    'country_name': country.countryname,
+                    'value' : feature.value,
+                    'date' : feature.date.strftime("%Y-%m-%d")
+                    })
+            return Response(json.dumps({"amount features country": len(res), "features country": res}),content_type="application/json")
+        
+@app.route('/get_province',  methods=['GET'])
+def get_province():
+    provinces = Province.query.all()
+    res = []
+    for province in provinces:
+        country = Country.query.filter_by(id=province.country_id).first()
+    res.append({
+        'country_name': country.countryname,
+        'province_id': province.id,
+        'province_name': province.provincename,
+        'coordinates': province.coordinates
+         })
+    return Response(json.dumps({"amount provinces": len(res), "province": res}),content_type="application/json")
+
+@app.route('/get_feature_province',  methods=['POST'])
+def get_feature_province():
+    json_string = request.get_json(force=True)
+    if 'province_id' in json_string:
+        province_id = int(json_string['province_id'])
+        province = Province.query.filter_by(id = province_id).first()
+        if province is None:
+            return "Province is not found"
+        else:
+            feature_province = FeatureProvince.query.filter_by(province_id=province.id).all()
+            res = []
+            for feature in feature_province:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                res.append({
+                'features_province_id': feature.id,
+                'feature_name': feat.featurename,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            return Response( json.dumps({"name province":province.provincename, "amount features province": len(res), "features province": res}),content_type="application/json")
+    else:
+        feature_province = FeatureProvince.query.all()
+        if 'characteristics' in json_string:
+            for curve in json_string['characteristics']:
+                feature_name = Feature.query.filter_by(featurename=curve['feature_name']).first()
+                if feature_name is None:
+                    return "Feature is not found"
+                value = curve['feature_name']
+                flag = curve['feature_name']
+                feature_province = feature_province.query.filter_by(feature_id = feature_name.id).all()
+                if feature_province is None:
+                        return "Features province is not found "
+                if flag == "=":
+                    feature_province = feature_province.query.filter_by( value = value).all()
+                    if feature_province is None:
+                        return "Features province is not found "
+                if flag == ">":
+                    feature_province = feature_province.query.filter(FeatureCountry.value > value).all()
+                    if feature_province is None:
+                        return "Features province is not found "
+                if flag == "<":
+                    feature_province = feature_province.query.filter(FeatureCountry.value < value).all()
+                    if feature_province is None:
+                        return "Features province is not found "
+
+            res = []
+            for feature in feature_province:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                province = Province.query.filter_by(id= feature.provonce_id).first()
+                res.append({
+                'features_province_id': feature.id,
+                'feature_name': feat.featurename,
+                'province_name': province.provincename,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            return Response( json.dumps({"amount features province": len(res), "features province": res}),content_type="application/json")
+
+@app.route('/get_group',  methods=['GET'])
+def get_group():
+    groups = Group.query.all()
+    res = [{
+
+        'group_id': group.id,
+        'group_name': group.groupname,
+        'group': group.group,
+        'coordinates': group.coordinates
+        }for group in groups]
+    return Response( json.dumps({"amount groups": len(res), "group": res}),content_type="application/json")
+
+
+@app.route('/get_gr_prov',  methods=['GET'])
+def get_gr_prov():
+    gr_provs = GroupProvince.query.all()
+    res = []
+    for gr_provs in gr_provs:
+        group = Group.query.filter_by(id = gr_provs.group_id).first()
+        province = Province.query.filter_by(id = gr_provs.province_id).first()
+        res.append({
+        'group_province_id': gr_provs.id,
+        'group_name': group.groupname,
+        'province_name': province.provincename
+
+        })
+    return Response( json.dumps({"amount": len(res), "group-province": res}),content_type="application/json")
+
+@app.route('/get_area',  methods=['POST'])
+def get_area():
+    json_string = request.get_json(force=True)
+
+    if json_string is None:
+        areas = Area.query.all()
+        res = []
+        for area in areas:
+            province = Province.query.filter_by(id=area.province_id).first()
+        res.append({
+            'province_name': province.provincename,
+            'area_id': area.id,
+            'area_name': area.areaname,
+            'coordinates': area.coordinates
+             })
+        return Response(json.dumps({"amount areas": len(res), "area": res}),content_type="application/json")
+    else:
+        if 'province_name' in json_string:
+            province = Province.query.filter_by(provincename=json_string['province_name']).first()
+            areas = Area.query.filter_by(province_id = province.id).all()
+            res = []
+            for area in areas:
+                res.append({
+                    'province_name': province.provincename,
+                    'area_id': area.id,
+                    'area_name': area.areaname,
+                    'coordinates': area.coordinates
+                     })
+            return Response(json.dumps({"province name":province.provincename, "amount areas": len(res), "area": res}),content_type="application/json")
+
+
+@app.route('/get_feature_area',  methods=['POST'])
+def get_feature_area():
+    json_string = request.get_json(force=True)
+    if 'area_id' in json_string:
+        area_id = int(json_string['area_id'])
+        area = Area.query.filter_by(id = area_id).first()
+        if area is None:
+            return "Area is not found"
+        else:
+            feature_area = FeatureArea.query.filter_by(province_id=area.id).all()
+            res = []
+            for feature in feature_area:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                res.append({
+                'features_area_id': feature.id,
+                'feature_name': feat.featurename,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            return Response(json.dumps({"name area":area.areaname, "amount features area": len(res), "features area": res}),content_type="application/json")
+    else:
+        feature_area = FeatureArea.query.all()
+        if 'characteristics' in json_string:
+            for curve in json_string['characteristics']:
+                feature_name = Feature.query.filter_by(featurename=curve['feature_name']).first()
+                if feature_name is None:
+                    return "Feature is not found"
+                value = curve['feature_name']
+                flag = curve['feature_name']
+                feature_area = feature_area.query.filter_by(feature_id = feature_name.id).all()
+                if feature_area is None:
+                        return "Features area is not found "
+                if flag == "=":
+                    feature_area = feature_area.query.filter_by( value = value).all()
+                    if feature_area is None:
+                        return "Features area is not found "
+                if flag == ">":
+                    feature_area = feature_area.query.filter(FeatureArea.value > value).all()
+                    if feature_area is None:
+                        return "Features area is not found "
+                if flag == "<":
+                    feature_area = feature_area.query.filter(FeatureArea.value < value).all()
+                    if feature_area is None:
+                        return "Features area is not found "
+
+            res = []
+            for feature in feature_area:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                area = Area.query.filter_by(id= feature.area_id).first()
+                res.append({
+                'features_area_id': feature.id,
+                'feature_name': feat.featurename,
+                'area_name': area.areaname,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            return Response(json.dumps({"amount features area": len(res), "features area": res}),content_type="application/json")
+
+@app.route('/get_locality',  methods=['POST'])
+def get_locality():
+    json_string = request.get_json(force=True)
+
+    if json_string is None:
+        localitys = Locality.query.all()
+        res = []
+        for locality in localitys:
+            province = Province.query.filter_by(id=locality.province_id).first()
+            area = Area.query.filter_by(id = locality.area_id).first()
+            if area is None:
+                areaname = ""
+            else:
+                areaname = area.areaname
+            res.append({
+                'province_name': province.provincename,
+                'area_name':areaname,
+                'locality_id': locality.id,
+                'locality_name': locality.localityname,
+                'coordinates': locality.coordinates
+                 })
+        return Response(json.dumps({"amount localitys": len(res), "locality": res}),content_type="application/json")
+    else:
+        if 'province_name' in json_string:
+            province = Province.query.filter_by(provincename = json_string['province_name']).first()
+            localitys = Locality.query.filter_by(province_id = province.id).all()
+            res = []
+            for locality in localitys:
+                area = Area.query.filter_by(id = locality.area_id).first()
+                if area is None:
+                    areaname = ""
+                else:
+                    areaname = area.areaname
+                res.append({
+                'area_name':areaname,
+                'locality_id': locality.id,
+                'locality_name': locality.localityname,
+                'coordinates': locality.coordinates
+                 })
+            return Response(json.dumps({"province name":province.provincename, "amount localitys": len(res), "locality": res}),content_type="application/json")
+        if 'area_name' in json_string:
+            area = Area.query.filter_by(areacename = json_string['area_name']).first()
+            localitys = Locality.query.filter_by(province_id = area.id).all()
+            res = []
+            for locality in localitys:
+                province = Province.query.filter_by(id = locality.province_id).first()
+                if province is None:
+                    provincename = ""
+                else:
+                    provincename = province.provinceaname
+                res.append({
+                'province_name':provincename,
+                'locality_id': locality.id,
+                'locality_name': locality.localityname,
+                'coordinates': locality.coordinates
+                 })
+            return Response(json.dumps({"area name":area.areaname, "amount localitys": len(res), "locality": res}),content_type="application/json")
+
+@app.route('/get_feature_locality',  methods=['POST'])
+def get_feature_locality():
+    json_string = request.get_json(force=True)
+    if 'locality_id' in json_string:
+        locality_id = int(json_string['locality_id'])
+        locality = Locality.query.filter_by(id = locality_id).first()
+        if locality is None:
+            return "Locality is not found"
+        else:
+            feature_locality = FeatureLocality.query.filter_by(locality_id=locality.id).all()
+            res = []
+            for feature in feature_locality:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                res.append({
+                'features_locality_id': feature.id,
+                'feature_name': feat.featurename,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            return Response(json.dumps({"name locality":locality.localityname, "amount features locality": len(res), "features locality": res}),content_type="application/json")
+    else:
+        feature_locality = FeatureLocality.query.all()
+        if 'characteristics' in json_string:
+            for curve in json_string['characteristics']:
+                feature_name = Feature.query.filter_by(featurename=curve['feature_name']).first()
+                if feature_name is None:
+                    return "Feature is not found"
+                value = curve['feature_name']
+                flag = curve['feature_name']
+                feature_locality = feature_locality.query.filter_by(feature_id = feature_name.id).all()
+                if feature_locality is None:
+                        return "Features locality is not found "
+                if flag == "=":
+                    feature_locality = feature_locality.query.filter_by( value = value).all()
+                    if feature_locality is None:
+                        return "Features locality is not found "
+                if flag == ">":
+                    feature_locality = feature_locality.query.filter(FeatureLocality.value > value).all()
+                    if feature_locality is None:
+                        return "Features locality is not found "
+                if flag == "<":
+                    feature_locality = feature_locality.query.filter(FeatureLocality.value < value).all()
+                    if feature_locality is None:
+                        return "Features locality is not found "
+
+            res = []
+            for feature in feature_locality:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                locality = Locality.query.filter_by(id= feature.locality_id).first()
+                res.append({
+                'features_locality_id': feature.id,
+                'feature_name': feat.featurename,
+                'locality_name': locality.localityname,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            return Response(json.dumps({"amount features locality": len(res), "features locality": res}),content_type="application/json")
+
+@app.route('/get_district',  methods=['POST'])
+def get_district():
+    json_string = request.get_json(force=True)
+
+    if json_string is None:
+        districts = District.query.all()
+        res = []
+        for district in districts:
+            locality = Locality.query.filter_by(id=district.locality_id).first()
+            province = Province.qury.filter_by(id= locality.province_id).first()
+            res.append({
+                'province_name':province.provincename,
+                'locality_name': locality.localityname,
+                'district_id': district.id,
+                'district_name': district.districtname,
+                'coordinates': district.coordinates
+                 })
+        return Response(json.dumps({"amount districts": len(res), "district": res}),content_type="application/json")
+    else:
+        if 'locality_name' in json_string:
+            locality = Locality.query.filter_by(localityname=json_string['locality_name']).first()
+            province = Province.qury.filter_by(id= locality.province_id).first()
+            districts = District.query.filter_by(locality_id = locality.id).all()
+            res = []
+            for district in districts:
+                res.append({
+                'district_id': district.id,
+                'district_name': district.districtname,
+                'coordinates': district.coordinates
+                 })
+            return Response(json.dumps({"province name":province.provincename,"locality name":locality.localityname, "amount districts": len(res), "district": res}),content_type="application/json")
+
+@app.route('/get_feature_district',  methods=['POST'])
+def get_feature_district():
+    json_string = request.get_json(force=True)
+    if 'district_id' in json_string:
+        district_id = int(json_string['district_id'])
+        district = District.query.filter_by(id = district_id).first()
+        if district is None:
+            return "District is not found"
+        else:
+            feature_district = FeatureDistrict.query.filter_by(district_id=district.id).all()
+            res = []
+            for feature in feature_district:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                res.append({
+                'features_district_id': feature.id,
+                'feature_name': feat.featurename,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            return Response(json.dumps({"name district": district.districtname, "amount features district": len(res), "features district": res}),content_type="application/json")
+    else:
+        feature_district = FeatureDistrict.query.all()
+        if 'characteristics' in json_string:
+            for curve in json_string['characteristics']:
+                feature_name = Feature.query.filter_by(featurename=curve['feature_name']).first()
+                if feature_name is None:
+                    return "Feature is not found"
+                value = curve['feature_name']
+                flag = curve['feature_name']
+                feature_district = feature_district.query.filter_by(feature_id = feature_name.id).all()
+                if feature_district is None:
+                        return "Features district is not found "
+                if flag == "=":
+                    feature_district = feature_district.query.filter_by( value = value).all()
+                    if feature_district is None:
+                        return "Features district is not found "
+                if flag == ">":
+                    feature_district = feature_district.query.filter(FeatureDistrict.value > value).all()
+                    if feature_district is None:
+                        return "Features district is not found "
+                if flag == "<":
+                    feature_district = feature_district.query.filter(FeatureDistrict.value < value).all()
+                    if feature_district is None:
+                        return "Features district is not found "
+
+            res = []
+            for feature in feature_district:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                district = District.query.filter_by(id= feature.district_id).first()
+                res.append({
+                'features_district_id': feature.id,
+                'feature_name': feat.featurename,
+                'locality_name': district.districtname,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            return Response(json.dumps({"amount features district": len(res), "features district": res}),content_type="application/json")
+
+@app.route('/get_street',  methods=['POST'])
+def get_street():
+    json_string = request.get_json(force=True)
+
+    if json_string is None:
+        streets = Street.query.all()
+        res = []
+        for street in streets:
+            locality = Locality.query.filter_by(id=street.locality_id).first()
+            province = Province.qury.filter_by(id= locality.province_id).first()
+            res.append({
+                'province_name':province.provincename,
+                'locality_name': locality.localityname,
+                'street_id': street.id,
+                'street_name': street.streetname,
+                'coordinates': street.coordinates,
+                'fias_id':street.fias_id
+                 })
+        return Response(json.dumps({"amount streets": len(res), "street": res}),content_type="application/json")
+    else:
+        if 'locality_name' in json_string:
+            locality = Locality.query.filter_by(localityname=json_string['locality_name']).first()
+            province = Province.qury.filter_by(id= locality.province_id).first()
+            streets = Street.query.filter_by(locality_id = locality.id).all()
+            res = []
+            for street in streets:
+                res.append({
+                'street_id': street.id,
+                'street_name': street.streetname,
+                'coordinates': street.coordinates,
+                'fias_id':street.fias_id
+                 })
+            return Response(json.dumps({"province name":province.provincename,"locality name":locality.localityname, "amount streets": len(res), "street": res}),content_type="application/json")
+        if 'fias_id' in json_string:
+            streets = Street.query.filter_by(fias_id = json_string['fias_id']).all()
+            res = []
+            for street in streets:
+                locality = Locality.query.filter_by(id=street.locality_id).first()
+                province = Province.qury.filter_by(id= locality.province_id).first()
+                res.append({
+                'province_name': province.provincename,
+                'locality_name': locality.localityname,
+                'street_id': street.id,
+                'street_name': street.streetname,
+                'coordinates': street.coordinates,
+                'fias_id':street.fias_id
+                 })
+            return Response(json.dumps({"fias id":json_string['fias_id'],"amount streets": len(res), "street": res}),content_type="application/json")
+
+@app.route('/get_address',  methods=['POST'])
+def get_address():
+    json_string = request.get_json(force=True)
+
+    if json_string is None:
+        addresses = Address.query.all()
+        res = []
+        for address in addresses:
+            country = Country.query.filter_by(id = address.country_id).first()
+            province = Province.query.filter_by(id = address.province_id).first()
+            area = Area.query.filter_by(id = address.area_id).first()
+            if area is None:
+                namearea = ""
+            else:
+                namearea = area.areaname
+            locality = Locality.query.filter_by(id=address.locality_id).first()
+            district = District.query.filter_by(id=address.district_id).first()
+            if district is None:
+                namedistrict = ""
+            else:
+                namedistrict = district.districtname
+            street = Street.query.filter_by(id=address.street_id).first()
+            res.append({
+                'country_name':country.countryname,
+                'province_name':province.provincename,
+                'area_name':namearea,
+                'locality_name': locality.localityname,
+                'district_name':namedistrict,
+                'street_name': street.streetname,
+                'house':address.house,
+                'block':address.block,
+                'building':address.building,
+                'postcode':address.postcode,
+                'addressline':address.addressline,
+                'address_id':address.id
+
+                 })
+        return Response(json.dumps({"amount address": len(res), "address": res}),content_type="application/json")
+    else:
+        if 'postcode' in json_string:
+            addresses = Address.query.filter_by(postcode=json_string['postcode']).all()
+            res=[]
+            for address in addresses:
+                country = Country.query.filter_by(id = address.country_id).first()
+                province = Province.query.filter_by(id = address.province_id).first()
+                area = Area.query.filter_by(id = address.area_id).first()
+                if area is None:
+                    namearea = ""
+                else:
+                    namearea = area.areaname
+                locality = Locality.query.filter_by(id=address.locality_id).first()
+                district = District.query.filter_by(id=address.district_id).first()
+                if district is None:
+                    namedistrict = ""
+                else:
+                    namedistrict = district.districtname
+                street = Street.query.filter_by(id=address.street_id).first()
+                res.append({
+                    'country_name':country.countryname,
+                    'province_name':province.provincename,
+                    'area_name':namearea,
+                    'locality_name': locality.localityname,
+                    'district_name':namedistrict,
+                    'street_name': street.streetname,
+                    'house':address.house,
+                    'block':address.block,
+                    'building':address.building,
+                    'postcode':address.postcode,
+                    'addressline':address.addressline,
+                    'address_id':address.id
+
+                     })
+            return Response(json.dumps({"postcode":json_string['postcode'], "amount address": len(res), "address": res}),content_type="application/json")
+
+        if 'locality_name' in json_string:
+            locality = Locality.query.filter_by(localityname = json_string['locality_name']).first()
+            addresses = Address.query.filter_by(locality_id = locality.id).all()
+            res=[]
+            for address in addresses:
+                country = Country.query.filter_by(id = address.country_id).first()
+                province = Province.query.filter_by(id = address.province_id).first()
+                area = Area.query.filter_by(id = address.area_id).first()
+                if area is None:
+                    namearea = ""
+                else:
+                    namearea = area.areaname
+                district = District.query.filter_by(id=address.district_id).first()
+                if district is None:
+                    namedistrict = ""
+                else:
+                    namedistrict = district.districtname
+                street = Street.query.filter_by(id=address.street_id).first()
+                res.append({
+                    'country_name':country.countryname,
+                    'province_name':province.provincename,
+                    'area_name':namearea,
+                    'locality_name': locality.localityname,
+                    'district_name':namedistrict,
+                    'street_name': street.streetname,
+                    'house':address.house,
+                    'block':address.block,
+                    'building':address.building,
+                    'postcode':address.postcode,
+                    'addressline':address.addressline,
+                    'address_id':address.id
+
+                     })
+            return Response(json.dumps({"locality":locality.localityname, "amount address": len(res), "address": res}),content_type="application/json")
+@app.route('/get_feature_address',  methods=['POST'])
+def get_feature_address():
+    json_string = request.get_json(force=True)
+    if 'address_id' in json_string:
+        address_id = int(json_string['address_id'])
+        address = Address.query.filter_by(id = address_id).first()
+        if address is None:
+            return "Address is not found"
+        else:
+            feature_address = FeatureAddress.query.filter_by(address_id=address.id).all()
+            res = []
+            for feature in feature_address:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                res.append({
+                'features_address_id': feature.id,
+                'feature_name': feat.featurename,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            return Response(json.dumps({"name address": address.addressline, "amount features address": len(res), "features address": res}),content_type="application/json")
+    else:
+        feature_address = FeatureAddress.query.all()
+        if 'characteristics' in json_string:
+            for curve in json_string['characteristics']:
+                feature_name = Feature.query.filter_by(featurename=curve['feature_name']).first()
+                if feature_name is None:
+                    return "Feature is not found"
+                value = curve['feature_name']
+                flag = curve['feature_name']
+                feature_address = feature_address.query.filter_by(feature_id = feature_name.id).all()
+                if feature_address is None:
+                        return "Features address is not found "
+                if flag == "=":
+                    feature_address = feature_address.query.filter_by( value = value).all()
+                    if feature_address is None:
+                        return "Features address is not found "
+                if flag == ">":
+                    feature_address = feature_address.query.filter(FeatureAddress.value > value).all()
+                    if feature_address is None:
+                        return "Features address is not found "
+                if flag == "<":
+                    feature_address = feature_address.query.filter(FeatureAddress.value < value).all()
+                    if feature_address is None:
+                        return "Features address is not found "
+
+            res = []
+            for feature in feature_address:
+                feat = Feature.query.filter_by(id=feature.feature_id).first()
+                address = Address.query.filter_by(id= feature.address_id).first()
+                res.append({
+                'features_address_id': feature.id,
+                'feature_name': feat.featurename,
+                'addressline': address.addressline,
+                'value' : feature.value,
+                'date' : feature.date.strftime("%Y-%m-%d")
+                })
+            return Response(json.dumps({"amount features address": len(res), "features address": res}),content_type="application/json")
+
+
+   
+
+
+
+
+  
+
+    
+       
+
+    
+   
+
+

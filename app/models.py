@@ -1,0 +1,195 @@
+from app import db
+from datetime import datetime, date
+
+class Category(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    categoryname = db.Column(db.String(64))
+    features = db.relationship('Feature', backref='category', lazy='dynamic')
+    
+    def __repr__(self):
+        return '<Category {}>'.format(self.categoryname) 
+
+class Feature(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    featurename = db.Column(db.String(64))
+    dimension = db.Column(db.String(64))
+    category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
+    area_features = db.relationship('FeatureArea', backref='feature', lazy='dynamic')
+    locality_features = db.relationship('FeatureLocality', backref='feature', lazy='dynamic')
+    district_features = db.relationship('FeatureDistrict', backref='feature', lazy='dynamic')
+    address_features = db.relationship('FeatureAddress', backref='feature', lazy='dynamic')
+    def __repr__(self):
+        return '<Feature {}>'.format(self.featurename) 
+   
+
+class Country(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    countryname = db.Column(db.String(64))
+    coordinates = db.Column(db.String(5000))
+    features = db.relationship('FeatureCountry', backref='country', lazy='dynamic')
+    provinces = db.relationship('Province', backref='country', lazy='dynamic')
+    addresses = db.relationship('Address', backref='country', lazy='dynamic')
+
+    def __repr__(self):
+        return '<Country {}>'.format(self.countryname) 
+
+class FeatureCountry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    country_id = db.Column(db.Integer, db.ForeignKey('country.id'))
+    feature_id = db.Column(db.Integer, db.ForeignKey('feature.id'))
+    value = db.Column(db.String(64))
+    date = db.Column(db.DateTime)
+
+    def __repr__(self):
+        return '<Feature_Country {}>'.format(self.value)
+
+class Province(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    provincename = db.Column(db.String(64))
+    coordinates = db.Column(db.String(5000))
+    country_id = db.Column(db.Integer, db.ForeignKey('country.id'))
+    features = db.relationship('FeatureProvince', backref='province', lazy='dynamic')
+    group_provinces = db.relationship('GroupProvince', backref='province', lazy='dynamic')
+    areas = db.relationship('Area', backref='province', lazy='dynamic')
+    localitys = db.relationship('Locality', backref='province', lazy='dynamic')
+    addresses = db.relationship('Address', backref='province', lazy='dynamic')
+    def __repr__(self):
+        return '<Province {}>'.format(self.provincename) 
+
+class FeatureProvince(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    province_id = db.Column(db.Integer, db.ForeignKey('province.id'))
+    feature_id = db.Column(db.Integer, db.ForeignKey('feature.id'))
+    value = db.Column(db.String(64))
+    date = db.Column(db.DateTime)
+
+    def __repr__(self):
+        return '<Feature_Province {}>'.format(self.value)
+
+class Group(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    groupname = db.Column(db.String(64))
+    group = db.Column(db.String(64))
+    coordinates = db.Column(db.String(5000))
+    features = db.relationship('GroupProvince', backref='group', lazy='dynamic')
+
+    def __repr__(self):
+        return '<Group {}>'.format(self.group)
+
+class GroupProvince(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    group_id = db.Column(db.Integer, db.ForeignKey('group.id'))
+    province_id = db.Column(db.Integer, db.ForeignKey('province.id'))
+
+
+    def __repr__(self):
+       return '<Group_Province {}>'.format(self.id)
+
+class Area(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    areaname = db.Column(db.String(64))
+    coordinates = db.Column(db.String(5000))
+    province_id = db.Column(db.Integer, db.ForeignKey('province.id'))
+    features = db.relationship('FeatureArea', backref='area', lazy='dynamic')
+    localitys = db.relationship('Locality', backref='area', lazy='dynamic')
+    Addresses = db.relationship('Address', backref='area', lazy='dynamic')
+    
+    def __repr__(self):
+        return '<Area {}>'.format(self.Area)
+
+class FeatureArea(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    area_id = db.Column(db.Integer, db.ForeignKey('area.id'))
+    feature_id = db.Column(db.Integer, db.ForeignKey('feature.id'))
+    value = db.Column(db.String(64))
+    date = db.Column(db.DateTime)
+
+    def __repr__(self):
+        return '<Feature_Area {}>'.format(self.value)
+
+class Locality(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    localityname = db.Column(db.String(64))
+    coordinates = db.Column(db.String(5000))
+    province_id = db.Column(db.Integer, db.ForeignKey('province.id'))
+    area_id = db.Column(db.Integer, db.ForeignKey('area.id'))
+    features = db.relationship('FeatureLocality', backref='locality', lazy='dynamic')
+    districts = db.relationship('District', backref='locality', lazy='dynamic')
+    streets = db.relationship('Street', backref='locality', lazy='dynamic')
+    addresses = db.relationship('Address', backref='locality', lazy='dynamic')
+    
+    def __repr__(self):
+        return '<Locality {}>'.format(self.localityname) 
+
+class FeatureLocality(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    locality_id = db.Column(db.Integer, db.ForeignKey('locality.id'))
+    feature_id = db.Column(db.Integer, db.ForeignKey('feature.id'))
+    value = db.Column(db.String(64))
+    date = db.Column(db.String(64))
+    
+    def __repr__(self):
+        return '<Feature_Locality {}>'.format(self.value) 
+
+class District(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    districtname = db.Column(db.String(64))
+    coordinates = db.Column(db.String(5000))
+    locality_id = db.Column(db.Integer, db.ForeignKey('locality.id'))
+
+    features = db.relationship('FeatureDistrict', backref='district', lazy='dynamic')
+    addresses = db.relationship('Address', backref='district', lazy='dynamic')
+
+    def __repr__(self):
+        return '<District {}>'.format(self.districtname)
+
+class FeatureDistrict(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'))
+    feature_id = db.Column(db.Integer, db.ForeignKey('feature.id'))
+    value = db.Column(db.String(64))
+    date = db.Column(db.DateTime)
+
+    def __repr__(self):
+        return '<Feature_District {}>'.format(self.value)
+
+class Street(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    streetname = db.Column(db.String(64))
+    coordinates = db.Column(db.String(5000))
+    locality_id = db.Column(db.Integer, db.ForeignKey('locality.id'))
+    fias_id = db.Column(db.String(64), index=True, unique=True)
+    addresses = db.relationship('Address', backref='street', lazy='dynamic')
+
+    def __repr__(self):
+        return '<Street {}>'.format(self.streetname)
+
+class Address(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    country_id = db.Column(db.Integer, db.ForeignKey('country.id'))
+    province_id = db.Column(db.Integer, db.ForeignKey('province.id'))
+    area_id = db.Column(db.Integer, db.ForeignKey('area.id'))
+    locality_id = db.Column(db.Integer, db.ForeignKey('locality.id'))
+    district_id = db.Column(db.Integer, db.ForeignKey('district.id'))
+    street_id = db.Column(db.Integer, db.ForeignKey('street.id'))
+    house = db.Column(db.String(10))
+    block = db.Column(db.String(10))
+    building = db.Column(db.String(10))
+    postcode = db.Column(db.String(10))
+    addressline = db.Column(db.String(64))
+
+    features = db.relationship('FeatureAddress', backref='street', lazy='dynamic')
+
+
+    def __repr__(self):
+        return '<Street {}>'.format(self.addressline)
+
+class FeatureAddress(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    address_id = db.Column(db.Integer, db.ForeignKey('address.id'))
+    feature_id = db.Column(db.Integer, db.ForeignKey('feature.id'))
+    value = db.Column(db.String(64))
+    date = db.Column(db.DateTime)
+
+    def __repr__(self):
+        return '<Feature_Address {}>'.format(self.value)
