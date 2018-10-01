@@ -1,21 +1,19 @@
 from datetime import datetime
 import os
+import sys
 from flask import request, json, Response, send_file, render_template
 from sqlalchemy import and_, text
 
 from openpyxl import Workbook
 from openpyxl.compat import range
 from openpyxl.utils import get_column_letter
-
+import pprint
 from app import app, db
 
 from .models import Category, Feature, Country, Province, Area, Locality, FeatureLocality
 
 
-@app.route ( '/' )
-def index():
-    return render_template ( 'index.html' )
-
+EPSILON = sys.float_info.epsilon
 
 def date_in_base(date):
     if date == "":
@@ -23,6 +21,30 @@ def date_in_base(date):
     else:
         date = datetime.strptime ( date + ",1,1", "%Y,%m,%d" )
     return date
+
+def convert_to_rgb(minval, maxval, val, colors):
+    fi = float(val-minval) / float(maxval-minval) * (len(colors)-1)
+    i = int(fi)
+    f = fi - i
+    if f < EPSILON:
+        return colors[i]
+    else:
+        (r1, g1, b1), (r2, g2, b2) = colors[i], colors[i+1]
+        return int(r1 + f*(r2-r1)), int(g1 + f*(g2-g1)), int(b1 + f*(b2-b1))
+
+
+def rgb_price(value,value_min,value_max):
+    colors = [(0, 255, 0), (255, 0, 0)]
+    minval, maxval = 0, 1
+    value = (value - value_min) / (value_max - value_min)
+    r, g, b = convert_to_rgb(minval, maxval, value, colors)
+    return '#{:02X}{:02X}{:02X}'.format(r, g, b)
+
+@app.route ( '/' )
+def index():
+    return render_template ( 'index.html' )
+
+engine = db.engine
 
 
 @app.route ( '/add_category', methods=[ 'POST' ] )
@@ -288,7 +310,7 @@ def get_locality():
                 } )
             return Response ( json.dumps (
                 {"province name": province.provincename, "amount localitys": len ( res ), "locality": res} ),
-                              content_type="application/json" )
+                content_type="application/json" )
         if 'area_name' in json_string:
             area = Area.query.filter_by ( areaname=json_string[ 'area_name' ] ).first ( )
             localitys = Locality.query.filter_by ( area_id=area.id ).all ( )
@@ -311,16 +333,18 @@ def get_locality():
 @app.route ( '/get_feature_locality', methods=[ 'POST' ] )
 def get_feature_locality():
     json_string = request.get_json ( force=True )
-    cities = json_string['checkedCity']
-    feat = json_string['checkedFeature']
-    yearMin = json_string['yearMin']
-    yearMax = json_string['yearMax']
+    cities = json_string[ 'checkedCity' ]
+    feat = json_string[ 'checkedFeature' ]
+    yearMin = json_string[ 'yearMin' ]
+    yearMax = json_string[ 'yearMax' ]
+    percent = json_string[ 'percent' ]
     newArr = {
-        'labels' : [],
-        'datasets' : []
+        'labels': [ ],
+        'datasets': [ ],
+        'title' : [],
     }
-    for i in range(int(yearMin), int(yearMax)+1):
-        newArr['labels'].append(i)
+    for i in range ( int ( yearMin ), int ( yearMax ) + 1 ):
+        newArr[ 'labels' ].append ( i )
     for el in feat:
         for x in cities:
             list = {}
@@ -328,20 +352,114 @@ def get_feature_locality():
             l = Locality.query.filter_by ( localityname=x ).first ( )
             if l is None:
                 return 'Locality not found'
-            f_loc = FeatureLocality.query.filter_by ( feature_id=f.id, locality_id=l.id )\
-                .filter(text("date>=" + str(yearMin)))\
-                .filter(text("date<=" +str(yearMax)))\
-                .all( )
-            data = []
-            for thx in f_loc:
-                data.append(int(thx.value))
+            f_loc = FeatureLocality.query.filter_by ( feature_id=f.id, locality_id=l.id ) \
+                .filter ( text ( "date>=" + str ( yearMin ) ) ) \
+                .filter ( text ( "date<=" + str ( yearMax ) ) ) \
+                .all ( )
+            if el != 'Численность населения':
+                if f.dimension == "Тыс. человек" or f.dimension == "Тысяч":
+                    if percent == True:
+                        pop = Feature.query.filter_by(featurename = "Численность населения").first()
+                        data = [ ]
+                        for item in f_loc:
+                            population  = FeatureLocality.query.filter_by(feature_id = pop.id, locality_id = l.id)\
+                            .filter(text("date = " + str(item.date))).first()
+                            value = round(float(int(item.value)/int(population.value)) * 100, 3)
+                            data.append(value)
+                    else:
+                        data = []
+                        for item in f_loc:
+                            data.append(int(item.value))
+                if f.dimension =="Тонн/человека" or f.dimension == "Куб. м/человека":
+                    pop = Feature.query.filter_by ( featurename="Численность населения" ).first ( )
+                    data = [ ]
+                    for item in f_loc:
+                        population = FeatureLocality.query.filter_by ( feature_id=pop.id, locality_id=l.id ) \
+                            .filter ( text ( "date = " + str ( item.date ) ) ).first ( )
+                        value = round(int ( item.value ) / int ( population.value ), 3)
+                        data.append ( value )
+                if f.dimension == "на 100 000 человек населения":
+                    data = []
+                    for item in f_loc:
+                        data.append(int(item.value))
+            else:
+                data = []
+                for item in f_loc:
+                    data.append(int(item.value))
+
+
             name = x
-            list[ 'label' ] = name
+            list ['label'] = name
             list[ 'data' ] = data
-            newArr['datasets'].append ( list )
+            newArr ['title'] = f.dimension
+            newArr[ 'datasets' ].append ( list )
 
     return Response ( json.dumps ( newArr ), content_type="application/json" )
 
+
+@app.route ( '/init_map', methods=[ 'POST' ] )
+def init_map():
+    try:
+        json_string = request.get_json ( force=True )
+    except:
+        json_string = None
+    result = []
+    values = [ ]
+    if json_string:
+        feat = json_string[ 'checkedFeature' ]
+        year = json_string[ 'year' ]
+        feature = Feature.query.filter_by(featurename = feat[0]).first()
+        cities = Locality.query.all()
+        for city in cities:
+            featuresArr = FeatureLocality.query.filter_by ( feature_id=feature.id ) \
+                .filter_by ( locality_id=city.id ) \
+                .filter ( text ( "date=" + str ( year ) ) ).all ( )
+            if(len(featuresArr) != 0):
+                list = {}
+                list['city'] = city.localityname
+                coord = city.coordinates.split(', ')
+                list['coord'] = coord
+                data = {}
+                if feature.dimension != "Численность населения":
+                    if feature.dimension == "Тыс. человек" or feature.dimension == "Тысяч":
+                        pop = Feature.query.filter_by ( featurename="Численность населения" ).first ( )
+                        for item in featuresArr:
+                            population = FeatureLocality.query.filter_by ( feature_id=pop.id, locality_id=city.id ) \
+                                .filter ( text ( "date = " + str ( item.date ) ) ).first ( )
+                            value = round ( float ( int ( item.value ) / int ( population.value ) ) * 100, 3 )
+                            values.append(value)
+                            data[item.date] = str(value) + ' %'
+                    if feature.dimension == "на 100 000 человек":
+                        for item in featuresArr:
+                            values.append(float(item.value))
+                            data[item.date] = str(item.value) + ' ' + feature.dimension
+                    if feature.dimension == "Тонн/человека" or feature.dimension == "Куб. м/человека":
+                        pop = Feature.query.filter_by ( featurename="Численность населения" ).first ( )
+                        for item in featuresArr:
+                            population = FeatureLocality.query.filter_by ( feature_id=pop.id, locality_id=city.id ) \
+                                .filter ( text ( "date = " + str ( item.date ) ) ).first ( )
+                            value = round ( float ( int ( item.value ) / int ( population.value ) ) * 100, 3 )
+                            if value > 7000000:
+                                print(city.id)
+                            values.append ( value )
+                            data[ item.date ] = str(item.value) + ' ' + feature.dimension
+
+                list['values'] = data
+                result.append(list)
+        maxVal = max(values)
+        minVal = min(values)
+        for item in result:
+            for key in item['values'].keys():
+                if feature.dimension == "Тыс. человек" or feature.dimension == "Тысяч":
+                    val = float(item['values'][key].replace(' %',''))
+                elif feature.dimension == "на 100 000 человек":
+                    val = float(item['values'][key].replace(' на 100 000 человек',''))
+                elif feature.dimension == "Тонн/человека" or feature.dimension == "Куб. м/человека":
+                    val = float ( item[ 'values' ][ key ].replace ( ' ' + feature.dimension, '' ) )
+                color = rgb_price(val,minVal,maxVal)
+                item['color'] = color
+
+    return Response ( json.dumps ( result ), content_type="application/json" )
 
 @app.route ( '/get_report', methods=[ 'POST' ] )
 def get_report():
